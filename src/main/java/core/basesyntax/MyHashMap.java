@@ -163,6 +163,11 @@ public class MyHashMap<K, V> implements MyMap<K, V> {
             Node<?, ?> node = (Node<?, ?>) o;
             return Objects.equals(key, node.key);
         }
+
+        @Override
+        public int hashCode() {
+            return Objects.hashCode(key);
+        }
     }
 
     private static final class SearchResult<K, V> {
@@ -170,7 +175,7 @@ public class MyHashMap<K, V> implements MyMap<K, V> {
         // (or null if bucket empty)
         private final boolean found; // true if node.key equals searched key
 
-        SearchResult(Node<K, V> node, boolean found) {
+        private SearchResult(Node<K, V> node, boolean found) {
             this.node = node;
             this.found = found;
         }
