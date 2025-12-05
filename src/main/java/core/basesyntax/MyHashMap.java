@@ -15,23 +15,25 @@ public class MyHashMap<K, V> implements MyMap<K, V> {
     public void put(K key, V value) {
         checkTable();
 
-        Node<K, V> newNode = new Node<>(key, value, null);
-        int bucketIndex = key != null ? getBucketByHash(key) : 0;
-        Node<K, V> nodeFromBucket = findNodeOrLastInBucket(bucketIndex, key);
+        int bucketIndex = getBucketByHash(key, currentCapacity);
+        SearchResult<K, V> res = searchBucket(bucketIndex, key);
 
-        if (nodeFromBucket == null) {
-            table[bucketIndex] = newNode;
+        if (res.node == null) {
+            // empty bucket -> insert as head
+            table[bucketIndex] = new Node<>(key, value, null);
             size++;
             return;
         }
 
-        if (!nodeFromBucket.equals(newNode)) {
-            nodeFromBucket.next = newNode;
-            size++;
+        if (res.found) {
+            // update existing
+            res.node.value = value;
             return;
         }
 
-        nodeFromBucket.value = value;
+        // not found -> append after last node (res.node is last)
+        res.node.next = new Node<>(key, value, null);
+        size++;
     }
 
     @Override
@@ -40,13 +42,16 @@ public class MyHashMap<K, V> implements MyMap<K, V> {
             return null;
         }
 
-        int index = key != null ? getBucketByHash(key) : 0;
-        Node<K, V> nodeFromBucket = findNodeOrLastInBucket(index, key);
-        if (nodeFromBucket == null || !Objects.equals(nodeFromBucket.key, key)) {
-            return null;
-        }
+        int bucketIndex = getBucketByHash(key, currentCapacity);
+        Node<K, V> node = table[bucketIndex];
 
-        return nodeFromBucket.value;
+        while (node != null) {
+            if (Objects.equals(node.key, key)) {
+                return node.value;
+            }
+            node = node.next;
+        }
+        return null;
     }
 
     @Override
@@ -62,15 +67,16 @@ public class MyHashMap<K, V> implements MyMap<K, V> {
             return;
         }
 
-        if (size > threshold) {
+        if (size >= threshold) {
             resizeTable();
         }
     }
 
     private void resizeTable() {
-        this.currentCapacity = this.currentCapacity << 1;
+        int newCapacity = this.currentCapacity << 1;
+        this.currentCapacity = newCapacity;
         this.threshold = (int) (this.currentCapacity * DEFAULT_LOAD_FACTOR);
-        table = transferTable(table, this.currentCapacity);
+        table = transferTable(table, newCapacity);
     }
 
     private Node<K, V>[] transferTable(Node<K, V>[] oldTable, int newCapacity) {
@@ -79,6 +85,11 @@ public class MyHashMap<K, V> implements MyMap<K, V> {
         }
 
         Node<K, V>[] newTable = (Node<K, V>[]) new Node[newCapacity];
+
+        if (oldTable == null) {
+            return newTable;
+        }
+
         Node<K, V>[] tails = (Node<K, V>[]) new Node[newCapacity];
 
         for (Node<K, V> kvNode : oldTable) {
@@ -87,7 +98,7 @@ public class MyHashMap<K, V> implements MyMap<K, V> {
             while (node != null) {
                 Node<K, V> next = node.next;
                 node.next = null;
-                int index = getBucketByHash(node.key);
+                int index = getBucketByHash(node.key, newCapacity);
 
                 if (newTable[index] == null) {
                     newTable[index] = node;
@@ -103,24 +114,34 @@ public class MyHashMap<K, V> implements MyMap<K, V> {
         return newTable;
     }
 
-    private int getBucketByHash(K key) {
-        return key.hashCode() & (currentCapacity - 1);
+    private int getBucketByHash(K key, int capacity) {
+        int h = (key == null) ? 0 : key.hashCode();
+        return h & (capacity - 1);
     }
 
-    private Node<K, V> findNodeOrLastInBucket(int bucketIndex, K key) {
+    private SearchResult<K, V> searchBucket(int bucketIndex, K key) {
+        if (table == null) {
+            return new SearchResult<>(null, false);
+        }
+
         if (bucketIndex < 0 || bucketIndex >= table.length) {
             throw new IndexOutOfBoundsException("bucketIndex out of range: " + bucketIndex);
         }
 
         Node<K, V> node = table[bucketIndex];
-        // iterate through the chain and compare keys safely
-        while (node != null) {
-            if (Objects.equals(node.key, key) || node.next == null) {
-                return node; // return existing node which is first equal or the last one
+        if (node == null) {
+            return new SearchResult<>(null, false); // empty bucket
+        }
+
+        while (true) {
+            if (Objects.equals(node.key, key)) {
+                return new SearchResult<>(node, true); // found matching node
+            }
+            if (node.next == null) {
+                return new SearchResult<>(node, false); // reached last node, not found
             }
             node = node.next;
         }
-        return null; // not found or empty bucket
     }
 
     private static class Node<K, V> {
@@ -143,4 +164,16 @@ public class MyHashMap<K, V> implements MyMap<K, V> {
             return Objects.equals(key, node.key);
         }
     }
+
+    private static final class SearchResult<K, V> {
+        private final Node<K, V> node; // either the matching node or the last node in bucket
+        // (or null if bucket empty)
+        private final boolean found; // true if node.key equals searched key
+
+        SearchResult(Node<K, V> node, boolean found) {
+            this.node = node;
+            this.found = found;
+        }
+    }
+
 }
