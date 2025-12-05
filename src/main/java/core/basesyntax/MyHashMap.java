@@ -4,8 +4,8 @@ import java.util.Objects;
 
 @SuppressWarnings("unchecked")
 public class MyHashMap<K, V> implements MyMap<K, V> {
-    static final int DEFAULT_INITIAL_CAPACITY = 1 << 4;
-    static final float DEFAULT_LOAD_FACTOR = 0.75f;
+    private static final int DEFAULT_INITIAL_CAPACITY = 1 << 4;
+    private static final float DEFAULT_LOAD_FACTOR = 0.75f;
     private int size;
     private int threshold;
     private int currentCapacity;
@@ -17,7 +17,7 @@ public class MyHashMap<K, V> implements MyMap<K, V> {
 
         Node<K, V> newNode = new Node<>(key, value, null);
         int bucketIndex = key != null ? getBucketByHash(key) : 0;
-        Node<K, V> nodeFromBucket = getNodeFromBucketByKey(bucketIndex, key);
+        Node<K, V> nodeFromBucket = findNodeOrLastInBucket(bucketIndex, key);
 
         if (nodeFromBucket == null) {
             table[bucketIndex] = newNode;
@@ -31,7 +31,7 @@ public class MyHashMap<K, V> implements MyMap<K, V> {
             return;
         }
 
-        nodeFromBucket.setValue(value);
+        nodeFromBucket.value = value;
     }
 
     @Override
@@ -41,12 +41,12 @@ public class MyHashMap<K, V> implements MyMap<K, V> {
         }
 
         int index = key != null ? getBucketByHash(key) : 0;
-        Node<K, V> nodeFromBucket = getNodeFromBucketByKey(index, key);
-        if (nodeFromBucket == null || !Objects.equals(nodeFromBucket.getKey(), key)) {
+        Node<K, V> nodeFromBucket = findNodeOrLastInBucket(index, key);
+        if (nodeFromBucket == null || !Objects.equals(nodeFromBucket.key, key)) {
             return null;
         }
 
-        return nodeFromBucket.getValue();
+        return nodeFromBucket.value;
     }
 
     @Override
@@ -81,22 +81,21 @@ public class MyHashMap<K, V> implements MyMap<K, V> {
         Node<K, V>[] newTable = (Node<K, V>[]) new Node[newCapacity];
         Node<K, V>[] tails = (Node<K, V>[]) new Node[newCapacity];
 
-        for (int i = 0; i < oldTable.length; i++) {
-            Node<K, V> node = oldTable[i];
+        for (Node<K, V> kvNode : oldTable) {
+            Node<K, V> node = kvNode;
 
             while (node != null) {
                 Node<K, V> next = node.next;
                 node.next = null;
-                int index = getBucketByHash(node.getKey());
+                int index = getBucketByHash(node.key);
 
                 if (newTable[index] == null) {
                     newTable[index] = node;
-                    tails[index] = node;
                 } else {
                     tails[index].next = node;
-                    tails[index] = node;
                 }
 
+                tails[index] = node;
                 node = next;
             }
         }
@@ -108,7 +107,7 @@ public class MyHashMap<K, V> implements MyMap<K, V> {
         return key.hashCode() & (currentCapacity - 1);
     }
 
-    private Node<K, V> getNodeFromBucketByKey(int bucketIndex, K key) {
+    private Node<K, V> findNodeOrLastInBucket(int bucketIndex, K key) {
         if (bucketIndex < 0 || bucketIndex >= table.length) {
             throw new IndexOutOfBoundsException("bucketIndex out of range: " + bucketIndex);
         }
@@ -116,7 +115,7 @@ public class MyHashMap<K, V> implements MyMap<K, V> {
         Node<K, V> node = table[bucketIndex];
         // iterate through the chain and compare keys safely
         while (node != null) {
-            if (Objects.equals(node.getKey(), key) || node.next == null) {
+            if (Objects.equals(node.key, key) || node.next == null) {
                 return node; // return existing node which is first equal or the last one
             }
             node = node.next;
@@ -124,7 +123,7 @@ public class MyHashMap<K, V> implements MyMap<K, V> {
         return null; // not found or empty bucket
     }
 
-    private class Node<K, V> {
+    private static class Node<K, V> {
         private final K key;
         private V value;
         private Node<K, V> next;
@@ -133,18 +132,6 @@ public class MyHashMap<K, V> implements MyMap<K, V> {
             this.key = key;
             this.value = value;
             this.next = next;
-        }
-
-        public K getKey() {
-            return key;
-        }
-
-        public V getValue() {
-            return value;
-        }
-
-        public void setValue(V value) {
-            this.value = value;
         }
 
         @Override
